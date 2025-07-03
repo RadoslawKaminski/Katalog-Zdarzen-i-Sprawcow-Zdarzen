@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Katalog Sprawców i Zdarzeń</title>
-
-<link rel="manifest" href="manifest.json">
+    
+    <!-- PWA / Instalacja -->
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0d6efd">
 
     <!-- Biblioteka Vue.js - serce reaktywności aplikacji -->
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
     <!-- Biblioteka Dexie.js - upraszcza pracę z lokalną bazą danych IndexedDB -->
     <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
-
     <style>
         /* --- Podstawowe Style i Zmienne Kolorów --- */
         :root {
@@ -65,6 +65,9 @@
             background-color: #495057; color: var(--text-color); font-size: 1em;
         }
         .form-group { display: flex; flex-direction: column; gap: 15px; }
+        .form-group-inline { display: flex; align-items: center; gap: 10px; }
+        .form-group-inline label { flex-shrink: 0; }
+        .form-group-inline input { flex-grow: 1; }
 
         .photo-preview-container { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
         .photo-preview-container img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; }
@@ -169,6 +172,12 @@
                         <input type="file" @change="handlePhotoUpload" accept="image/*" multiple required>
                         <div class="photo-preview-container"><img v-for="url in addForm.photoUrls" :src="url" :key="url"></div>
                         <div class="form-group">
+                            <div class="form-group-inline">
+                                <label>Wiek:</label>
+                                <input type="number" v-model.number="addForm.suspect.ageMin" placeholder="Od">
+                                <span>-</span>
+                                <input type="number" v-model.number="addForm.suspect.ageMax" placeholder="Do">
+                            </div>
                             <!-- Dynamicznie dodawane pola profilu sprawcy -->
                             <div v-for="field in addForm.suspectFields" :key="field.key">
                                 <div v-if="field.type === 'select'"><select v-model="field.value"><option value="" disabled>{{ field.label }}...</option><option v-for="option in field.options" :value="option">{{ option }}</option></select></div>
@@ -205,15 +214,26 @@
         
         <!-- === MODALE (okna dialogowe) === -->
         <!-- Modal filtrów -->
-        <div v-if="modals.filters.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Filtry</h2><button @click="modals.filters.show = false" class="close-button">×</button></div><form><fieldset v-for="(group, key) in filterSchema" :key="key" class="filter-group"><legend>{{ group.label }}</legend><div class="filter-options"><label v-for="option in group.options" :key="option" :class="{checked: filters[key] && filters[key].includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="filters[key]"></label></div></fieldset></form><div class="modal-actions"><button @click="modals.filters.show = false" class="btn" style="flex: 2;">Zastosuj</button><button @click="resetFilters" class="btn btn-secondary" style="flex: 1;">Wyczyść</button></div></div></div>
+        <div v-if="modals.filters.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Filtry</h2><button @click="modals.filters.show = false" class="close-button">×</button></div><form>
+            <fieldset class="filter-group">
+                <legend>Zakres wieku</legend>
+                <div class="form-group-inline">
+                    <input type="number" v-model.number="filters.ageRange.min" placeholder="Od">
+                    <span>-</span>
+                    <input type="number" v-model.number="filters.ageRange.max" placeholder="Do">
+                </div>
+            </fieldset>
+            <fieldset v-for="(group, key) in filterSchema" :key="key" class="filter-group"><legend>{{ group.label }}</legend><div class="filter-options"><label v-for="option in group.options" :key="option" :class="{checked: filters[key] && filters[key].includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="filters[key]"></label></div></fieldset>
+            <fieldset v-if="availableStores.length > 0" class="filter-group"><legend>Numer sklepu</legend><div class="filter-options"><label v-for="store in availableStores" :key="store" :class="{checked: filters.stores.includes(store)}"><span>{{ store }}</span><input type="checkbox" :value="store" v-model="filters.stores"></label></div></fieldset>
+        </form><div class="modal-actions"><button @click="modals.filters.show = false" class="btn" style="flex: 2;">Zastosuj</button><button @click="resetFilters" class="btn btn-secondary" style="flex: 1;">Wyczyść</button></div></div></div>
         <!-- Modal szczegółów sprawcy -->
-        <div v-if="modals.details.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>{{ modals.details.data.suspect.nickname || 'Sprawca #' + modals.details.data.suspect.id }}</h2><div><button class="btn-icon" @click="openEditSuspectModal(modals.details.data.suspect)">✏️</button><button @click="modals.details.show = false" class="close-button">×</button></div></div><div class="suspect-details-photos"><img v-for="url in modals.details.data.suspect.photoUrls" :src="url" @click="showFullscreenPhoto(url)"></div><h3>Dane</h3><dl class="suspect-details-info"><template v-for="(value, key) in modals.details.data.suspect"><template v-if="fieldSchemas.suspect[key] && value && value.length > 0"><dt>{{ fieldSchemas.suspect[key].label }}</dt><dd>{{ Array.isArray(value) ? value.join(', ') : value }}</dd></template></template></dl><h3>Statystyki</h3><dl class="suspect-stats"><dt>Ostatnie ujęcie</dt><dd>{{ modals.details.data.stats.lastApprehensionDate || 'Nigdy' }}</dd><dt>Suma kradzieży</dt><dd>{{ modals.details.data.stats.totalAmount.toFixed(2) }} zł</dd><dt>Suma od ujęcia</dt><dd>{{ modals.details.data.stats.amountSinceApprehension.toFixed(2) }} zł</dd><dt>Odwiedzone sklepy</dt><dd>{{ modals.details.data.stats.visitedStores.join(', ') || 'Brak' }}</dd></dl><h3>Historia zdarzeń</h3><div v-if="modals.details.data.events.length > 0"><div v-for="event in modals.details.data.events" class="event-entry"><div class="event-header"><h5>{{ event.amobitId }}: {{ event.eventType }} - {{ event.eventDate ? new Date(event.eventDate).toLocaleString('pl-PL') : 'Brak daty' }}</h5><button class="btn-icon" @click="openEditEventModal(event)">✏️</button></div><p>Sklep: {{ event.storeNumber || 'nd' }} | Kwota: {{ typeof event.amount === 'number' ? event.amount.toFixed(2) + ' zł' : 'nd' }}</p><div v-if="event.theftType && event.theftType.length > 0"><p style="margin: 5px 0;"><strong>Typ kradzieży:</strong> {{ event.theftType.filter(t => t !== 'inne').join(', ') }}<span v-if="event.theftType.includes('inne')">, inne: {{ event.theftTypeOther || 'brak opisu' }}</span></p></div><p style="font-style: italic;">{{ event.description || '' }}</p></div></div><p v-else>Brak zarejestrowanych zdarzeń.</p><div class="modal-actions"><button @click="openAddEventModal(modals.details.data.suspect.id)" class="btn" style="flex: 2;">+ Dodaj/Przypisz zdarzenie</button><button @click="deleteSuspect(modals.details.data.suspect.id)" class="btn btn-danger" style="flex: 1;">Usuń</button></div></div></div>
+        <div v-if="modals.details.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>{{ modals.details.data.suspect.nickname || 'Sprawca #' + modals.details.data.suspect.id }}</h2><div><button class="btn-icon" @click="openEditSuspectModal(modals.details.data.suspect)">✏️</button><button @click="modals.details.show = false" class="close-button">×</button></div></div><div class="suspect-details-photos"><img v-for="url in modals.details.data.suspect.photoUrls" :src="url" @click="showFullscreenPhoto(url)"></div><h3>Dane</h3><dl class="suspect-details-info"><dt v-if="modals.details.data.suspect.ageMin || modals.details.data.suspect.ageMax">Wiek</dt><dd v-if="modals.details.data.suspect.ageMin || modals.details.data.suspect.ageMax">{{ modals.details.data.suspect.ageMin || '?' }} - {{ modals.details.data.suspect.ageMax || '?' }} lat</dd><template v-for="(value, key) in modals.details.data.suspect"><template v-if="fieldSchemas.suspect[key] && value && value.length > 0"><dt>{{ fieldSchemas.suspect[key].label }}</dt><dd>{{ Array.isArray(value) ? value.join(', ') : value }}</dd></template></template></dl><h3>Statystyki</h3><dl class="suspect-stats"><dt>Ostatnie ujęcie</dt><dd>{{ modals.details.data.stats.lastApprehensionDate || 'Nigdy' }}</dd><dt>Suma kradzieży</dt><dd>{{ modals.details.data.stats.totalAmount.toFixed(2) }} zł</dd><dt>Suma od ujęcia</dt><dd>{{ modals.details.data.stats.amountSinceApprehension.toFixed(2) }} zł</dd><dt>Odwiedzone sklepy</dt><dd>{{ modals.details.data.stats.visitedStores.join(', ') || 'Brak' }}</dd></dl><h3>Historia zdarzeń</h3><div v-if="modals.details.data.events.length > 0"><div v-for="event in modals.details.data.events" class="event-entry"><div class="event-header"><h5>{{ event.amobitId }}: {{ event.eventType }} - {{ event.eventDate ? new Date(event.eventDate).toLocaleString('pl-PL') : 'Brak daty' }}</h5><button class="btn-icon" @click="openEditEventModal(event)">✏️</button></div><p>Sklep: {{ event.storeNumber || 'nd' }} | Kwota: {{ typeof event.amount === 'number' ? event.amount.toFixed(2) + ' zł' : 'nd' }}</p><div v-if="event.theftType && event.theftType.length > 0"><p style="margin: 5px 0;"><strong>Typ kradzieży:</strong> {{ event.theftType.filter(t => t !== 'inne').join(', ') }}<span v-if="event.theftType.includes('inne')">, inne: {{ event.theftTypeOther || 'brak opisu' }}</span></p></div><p style="font-style: italic;">{{ event.description || '' }}</p></div></div><p v-else>Brak zarejestrowanych zdarzeń.</p><div class="modal-actions"><button @click="openAddEventModal(modals.details.data.suspect.id)" class="btn" style="flex: 2;">+ Dodaj/Przypisz zdarzenie</button><button @click="deleteSuspect(modals.details.data.suspect.id)" class="btn btn-danger" style="flex: 1;">Usuń</button></div></div></div>
         <!-- Modal wyboru pola do dodania -->
         <div v-if="modals.fields.show" id="field-selection-modal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Wybierz pole do dodania</h2><button @click="modals.fields.show = false" class="close-button">×</button></div><div class="field-selection-menu"><button v-for="field in modals.fields.available" :key="field.key" @click="addDynamicField(field)" class="btn">{{ field.label }}</button></div></div></div>
         <!-- Modal dodawania/przypisywania zdarzenia -->
         <div v-if="modals.addEvent.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Dodaj zdarzenie do #{{ modals.addEvent.suspectId }}</h2><button @click="modals.addEvent.show = false" class="close-button">×</button></div><div><div class="modal-tabs"><button @click="modals.addEvent.mode = 'new'" :class="{active: modals.addEvent.mode === 'new'}" class="btn">Nowe</button><button @click="modals.addEvent.mode = 'assign'" :class="{active: modals.addEvent.mode === 'assign'}" class="btn">Istniejące</button></div><div v-if="modals.addEvent.mode === 'new'"><form @submit.prevent="saveNewEventToSuspect"><div class="form-group"><input type="text" v-model="addEventForm.amobitId" placeholder="Numer Amodit (ID Zdarzenia)" required><select v-model="addEventForm.type" required><option value="" disabled>Rodzaj zdarzenia...</option><option>Udaremnienie</option><option>Ujęcie</option><option>Wykrycie</option></select><input type="number" v-model="addEventForm.storeNumber" placeholder="Nr sklepu (max 4 cyfry)" max="9999"><input type="date" v-model="addEventForm.date"><div v-for="field in addEventForm.eventFields" :key="field.key"><input v-if="field.key === 'amount'" type="number" step="0.01" v-model="field.value" placeholder="Kwota strat"><textarea v-if="field.key === 'description'" v-model="field.value" rows="3" placeholder="Dodatkowy opis..."></textarea><div v-if="field.key === 'theftType'"><fieldset><legend>{{ field.label }}</legend><div class="filter-options"><label v-for="option in field.options" :key="option" :class="{checked: field.value.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="field.value"></label></div></fieldset><textarea v-if="field.value.includes('inne')" v-model="addEventForm.theftTypeOther" rows="2" placeholder="Opisz inny typ kradzieży..." style="margin-top: 10px;"></textarea></div></div></div><button type="button" class="btn btn-dynamic-add" @click="openFieldSelectionMenu('event', true)">+ Dodaj pole</button><button type="submit" class="btn btn-success" style="margin-top: 15px;">Zapisz nowe zdarzenie</button></form></div><div v-if="modals.addEvent.mode === 'assign'"><form @submit.prevent="assignExistingEvent"><input type="text" v-model="assignEventId" placeholder="Wpisz numer Amodit zdarzenia" required><button type="submit" class="btn btn-success" style="margin-top: 15px;">Przypisz zdarzenie</button></form></div></div></div></div>
         <!-- Modal edycji sprawcy -->
-        <div v-if="modals.editSuspect.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Edytuj sprawcę</h2><button @click="modals.editSuspect.show = false" class="close-button">×</button></div><form @submit.prevent="saveSuspectChanges"><div class="form-group"><div v-for="field in modals.editSuspect.fields" :key="field.key"><label>{{field.label}}</label><div v-if="field.type === 'select'"><select v-model="field.value"><option value="" disabled>Wybierz...</option><option v-for="option in field.options" :value="option">{{ option }}</option></select></div><input v-if="field.type === 'text'" type="text" v-model="field.value" :placeholder="field.label"><fieldset v-if="field.type === 'checkbox'"><div class="filter-options"><label v-for="option in field.options" :key="option" :class="{checked: field.value.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="field.value"></label></div></fieldset></div></div><button type="submit" class="btn btn-success">Zapisz zmiany</button></form></div></div>
+        <div v-if="modals.editSuspect.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Edytuj sprawcę</h2><button @click="modals.editSuspect.show = false" class="close-button">×</button></div><form @submit.prevent="saveSuspectChanges"><div class="form-group"><div class="form-group-inline"><label>Wiek:</label><input type="number" v-model.number="modals.editSuspect.data.ageMin" placeholder="Od"><input type="number" v-model.number="modals.editSuspect.data.ageMax" placeholder="Do"></div><div v-for="field in modals.editSuspect.fields" :key="field.key"><label>{{field.label}}</label><div v-if="field.type === 'select'"><select v-model="field.value"><option value="" disabled>Wybierz...</option><option v-for="option in field.options" :value="option">{{ option }}</option></select></div><input v-if="field.type === 'text'" type="text" v-model="field.value" :placeholder="field.label"><fieldset v-if="field.type === 'checkbox'"><div class="filter-options"><label v-for="option in field.options" :key="option" :class="{checked: field.value.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="field.value"></label></div></fieldset></div></div><button type="submit" class="btn btn-success">Zapisz zmiany</button></form></div></div>
         <!-- Modal edycji zdarzenia -->
         <div v-if="modals.editEvent.show" class="modal"><div class="modal-content"><div class="modal-header"><h2>Edytuj zdarzenie {{ modals.editEvent.data.amobitId }}</h2><button @click="modals.editEvent.show = false" class="close-button">×</button></div><form @submit.prevent="saveEventChanges"><div class="form-group"><label>Rodzaj zdarzenia</label><select v-model="modals.editEvent.data.eventType"><option>Udaremnienie</option><option>Ujęcie</option><option>Wykrycie</option></select><label>Nr sklepu</label><input type="number" v-model="modals.editEvent.data.storeNumber"><label>Data</label><input type="date" v-model="modals.editEvent.data.dateForInput"><label>Typ kradzieży</label><fieldset><div class="filter-options"><label v-for="option in fieldSchemas.event.theftType.options" :key="option" :class="{checked: modals.editEvent.data.theftType && modals.editEvent.data.theftType.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="modals.editEvent.data.theftType"></label></div></fieldset><textarea v-if="modals.editEvent.data.theftType && modals.editEvent.data.theftType.includes('inne')" v-model="modals.editEvent.data.theftTypeOther" rows="2" placeholder="Opisz inny typ kradzieży..."></textarea><label>Kwota</label><input type="number" step="0.01" v-model="modals.editEvent.data.amount"><label>Opis</label><textarea v-model="modals.editEvent.data.description"></textarea></div><button type="submit" class="btn btn-success">Zapisz zmiany</button></form></div></div>
         <!-- Modal ustawień -->
@@ -224,13 +244,33 @@
 
     <script>
     // === BAZA DANYCH (DEXIE.JS) ===
-    // Definicja bazy danych i jej tabel (kolekcji)
     const db = new Dexie('AmobitSecurityVueDB');
-    db.version(2).stores({
-        suspects: '++id, nickname, gender, age, hairColor, hairLength, glasses, zarost, *tattoos', // ++id to auto-inkrementowany klucz główny, reszta to indeksy do wyszukiwania
-        events: '&amobitId, suspectId, *theftType', // &amobitId oznacza unikalny klucz główny, suspectId to indeks do łączenia ze sprawcą
+    // Wersja 3: Zmiana pola 'age' na 'ageMin' i 'ageMax'
+    db.version(3).stores({
+        suspects: '++id, nickname, gender, ageMin, ageMax, hairColor, hairLength, glasses, zarost, *tattoos',
+        events: '&amobitId, suspectId, *theftType',
     }).upgrade(tx => {
-        // Skrypt migracji dla użytkowników, którzy mieli wersję 1 bazy danych
+        // Skrypt migracji z wersji 2 do 3
+        return tx.table('suspects').toCollection().modify(s => {
+            if (s.age) { // Jeśli istnieje stare pole 'age'
+                const ageMap = {
+                    "Poniżej 18": { min: null, max: 17 }, "18-25": { min: 18, max: 25 },
+                    "26-40": { min: 26, max: 40 }, "41-60": { min: 41, max: 60 },
+                    "Powyżej 60": { min: 61, max: null }
+                };
+                const range = ageMap[s.age];
+                if (range) {
+                    s.ageMin = range.min;
+                    s.ageMax = range.max;
+                }
+                delete s.age; // Usuń stare pole
+            }
+        });
+    });
+    db.version(2).stores({
+        suspects: '++id, nickname, gender, age, hairColor, hairLength, glasses, zarost, *tattoos',
+        events: '&amobitId, suspectId, *theftType',
+    }).upgrade(tx => {
         return tx.table("events").toCollection().modify(event => {
             if (event.theftType === undefined) event.theftType = [];
             if (event.theftTypeOther === undefined) event.theftTypeOther = '';
@@ -238,13 +278,10 @@
     });
 
     // === SCHEMATY PÓL ===
-    // Centralne miejsce definiujące wszystkie możliwe pola, ich etykiety i opcje.
-    // Opcja "Nieokreślone" jest dodawana dynamicznie tylko w filtrach.
     const fieldSchemas = {
         suspect: {
             nickname: { label: "Pseudonim", type: "text" },
             gender: { label: "Płeć", type: "select", options: ["Kobieta", "Mężczyzna", "Inne"] },
-            age: { label: "Wiek", type: "select", options: ["Poniżej 18", "18-25", "26-40", "41-60", "Powyżej 60"] },
             hairColor: { label: "Kolor włosów", type: "select", options: ["Blond", "Brunet", "Czarne", "Rude", "Siwe", "Inny"] },
             hairLength: { label: "Długość włosów", type: "select", options: ["Krótkie", "Do ramion", "Długie", "Łysy"] },
             glasses: { label: "Okulary", type: "select", options: ["Tak", "Nie", "Nieraz"] },
@@ -277,43 +314,35 @@
     }
 
     // === GŁÓWNA INSTANCJA VUE.JS ===
-    // Cała logika aplikacji jest zamknięta w tym obiekcie.
     new Vue({
-        el: '#app', // Łączy Vue z elementem HTML o id="app"
-        // --- STAN APLIKACJI ---
-        // 'data' to centralny magazyn wszystkich danych, które mogą się zmieniać.
-        // Vue automatycznie obserwuje te dane i aktualizuje interfejs, gdy się zmienią.
+        el: '#app',
         data: {
-            isReady: false, // Flaga używana do uniknięcia "mignięcia" nieostylowanej treści
-            activeView: 'baza', // Przechowuje informację, która zakładka jest aktywna ('baza' lub 'dodaj')
-            suspects: [], // Tablica przechowująca wszystkich sprawców wczytanych z bazy
-            searchPhrase: '', // Przechowuje tekst wpisany w pole wyszukiwania
-            // Obiekt zarządzający widocznością wszystkich okien modalnych
+            isReady: false,
+            activeView: 'baza',
+            suspects: [],
+            availableStores: [],
+            searchPhrase: '',
             modals: {
                 filters: { show: false },
                 details: { show: false, data: { suspect: {}, events: [], stats: {} } },
                 fields: { show: false, target: null, available: [] },
                 addEvent: { show: false, suspectId: null, mode: 'new' },
-                editSuspect: { show: false, id: null, fields: [] },
+                editSuspect: { show: false, data: {}, fields: [] },
                 editEvent: { show: false, data: {} },
                 settings: { show: false },
                 fullscreenPhoto: { show: false, url: '' }
             },
-            filters: {}, // Obiekt przechowujący aktywne filtry
-            addForm: {}, // Obiekt przechowujący dane z formularza dodawania nowego sprawcy
-            addEventForm: {}, // Obiekt przechowujący dane z formularza dodawania zdarzenia do istniejącego sprawcy
-            assignEventId: '', // Przechowuje ID zdarzenia do przypisania
-            fieldSchemas: fieldSchemas, // Udostępnienie schematów w szablonie
+            filters: {},
+            addForm: {},
+            addEventForm: {},
+            assignEventId: '',
+            fieldSchemas: fieldSchemas,
         },
-        // --- WŁAŚCIWOŚCI OBLICZENIOWE ---
-        // 'computed' to funkcje, które zwracają wartości na podstawie danych ze stanu.
-        // Vue przechowuje ich wyniki w pamięci podręcznej i przelicza je tylko wtedy, gdy zmienią się dane, od których zależą.
         computed: {
-            // Tworzy schemat dla formularza filtrów, dynamicznie dodając opcję "Nieokreślone".
             filterSchema() {
                 const schema = {};
                 for (const key in fieldSchemas.suspect) {
-                    if (key !== 'nickname') {
+                    if (key !== 'nickname' && key !== 'age') {
                         const originalOptions = fieldSchemas.suspect[key].options;
                         schema[key] = {
                             label: fieldSchemas.suspect[key].label,
@@ -323,31 +352,47 @@
                 }
                 return schema;
             },
-            // Główna logika filtrowania i wyszukiwania. Zwraca przefiltrowaną listę sprawców.
             filteredSuspects() {
                 if (!this.isReady) return [];
                 const phrase = this.searchPhrase.toLowerCase().trim();
+                const defaultAgeFilter = { min: 10, max: 90 };
                 
                 return this.suspects.filter(suspect => {
-                    // Logika dla filtrów zaawansowanych
+                    // Filtr wieku (zakresy muszą się pokrywać)
+                    const filterRange = this.filters.ageRange;
+                    if (filterRange.min > defaultAgeFilter.min || filterRange.max < defaultAgeFilter.max) {
+                        if (!suspect.ageMin && !suspect.ageMax) return false; // Wyklucz, jeśli sprawca nie ma zdefiniowanego wieku
+                        // Logika pokrywania się zakresów: !(koniec_A < początek_B || początek_A > koniec_B)
+                        const overlaps = (suspect.ageMin || 0) <= filterRange.max && (suspect.ageMax || 999) >= filterRange.min;
+                        if (!overlaps) return false;
+                    }
+
+                    // Filtry cech
                     for (const key in this.filters) {
+                        if (key === 'ageRange' || key === 'stores') continue;
                         const requiredValues = this.filters[key];
                         if (!requiredValues || requiredValues.length === 0) continue;
-
+                        
                         const suspectValue = suspect[key];
                         const isUnspecified = suspectValue == null || suspectValue === '' || (Array.isArray(suspectValue) && suspectValue.length === 0);
                         
                         const match = requiredValues.some(required => {
                             if (required === 'Nieokreślone') return isUnspecified;
-                            if (isUnspecified) return false; // Jeśli pole jest nieokreślone, nie może pasować do żadnej konkretnej wartości
+                            if (isUnspecified) return false;
                             if (Array.isArray(suspectValue)) return suspectValue.includes(required);
                             return suspectValue === required;
                         });
-
                         if (!match) return false;
                     }
+
+                    // Filtr sklepów
+                    if (this.filters.stores && this.filters.stores.length > 0) {
+                        if (!this.filters.stores.some(store => suspect.stores.includes(store))) {
+                            return false;
+                        }
+                    }
                     
-                    // Logika dla wyszukiwania frazą w danych sprawcy i jego zdarzeniach
+                    // Wyszukiwanie frazą
                     if (phrase) {
                         if (!suspect.searchableText.includes(phrase)) return false;
                     }
@@ -355,33 +400,42 @@
                     return true;
                 });
             },
-            // Oblicza, ile filtrów jest aktualnie aktywnych, do wyświetlenia na przycisku
-            activeFilterCount() { return Object.values(this.filters).reduce((count, arr) => count + (Array.isArray(arr) ? arr.length : 0), 0); }
+            activeFilterCount() {
+                let count = 0;
+                const defaultAgeFilter = { min: 10, max: 90 };
+                for (const key in this.filters) {
+                    if (key === 'ageRange') {
+                        if (this.filters.ageRange.min !== defaultAgeFilter.min || this.filters.ageRange.max !== defaultAgeFilter.max) {
+                            count++;
+                        }
+                    } else if (this.filters[key] && this.filters[key].length > 0) {
+                        count += this.filters[key].length;
+                    }
+                }
+                return count;
+            }
         },
-        // --- METODY ---
-        // 'methods' to zbiór funkcji, które można wywoływać w szablonie HTML (np. przez @click).
         methods: {
-            // Tworzy zwięzłe podsumowanie cech sprawcy do wyświetlenia na liście
             getSuspectSummary(suspect) {
-                return [suspect.gender, suspect.age, suspect.hairColor, suspect.hairLength, suspect.glasses, suspect.zarost].filter(Boolean).join(', ');
+                let parts = [];
+                if (suspect.gender) parts.push(suspect.gender);
+                if (suspect.ageMin || suspect.ageMax) parts.push(`${suspect.ageMin || '?'}-${suspect.ageMax || '?'} lat`);
+                if (suspect.hairColor) parts.push(suspect.hairColor);
+                return parts.filter(Boolean).join(', ');
             },
-            // Przełącza między widokami "Katalog" i "Dodaj"
             switchView(viewName) { this.activeView = viewName; if (viewName === 'dodaj') this.resetAddForm(); },
-            // Resetuje formularz dodawania do stanu początkowego
             resetAddForm() {
                 this.addForm = {
                     photos: [], photoUrls: [], suspectFields: [], eventFields: [],
+                    suspect: { ageMin: null, ageMax: null },
                     event: { amobitId: '', type: '', storeNumber: '', date: new Date().toISOString().slice(0, 10), theftTypeOther: '' },
                 };
             },
-            // Resetuje formularz dodawania zdarzenia w modalu
             resetAddEventForm() { this.addEventForm = { amobitId: '', type: '', storeNumber: '', date: new Date().toISOString().slice(0, 10), eventFields: [], theftTypeOther: '' }; },
-            // Obsługuje wgranie zdjęć i tworzy podgląd
             handlePhotoUpload(e) {
                 this.addForm.photos = Array.from(e.target.files);
                 this.addForm.photoUrls = this.addForm.photos.map(p => URL.createObjectURL(p));
             },
-            // Otwiera modal z listą dostępnych pól do dodania
             openFieldSelectionMenu(target, forAddEventModal = false) {
                 const form = forAddEventModal ? this.addEventForm : this.addForm;
                 const existing = forAddEventModal ? form.eventFields.map(f => f.key) : (target === 'suspect' ? form.suspectFields.map(f => f.key) : form.eventFields.map(f => f.key));
@@ -392,7 +446,6 @@
                 this.modals.fields.target = target;
                 this.modals.fields.show = true;
             },
-            // Dodaje wybrane pole do odpowiedniego formularza
             addDynamicField(field) {
                 const { target, key, forAddEventModal } = field;
                 const schema = fieldSchemas[target][key];
@@ -405,11 +458,14 @@
                 else form.eventFields.push(newField);
                 this.modals.fields.show = false;
             },
-            // Zapisuje nowego sprawcę i opcjonalnie zdarzenie
             async saveNewEntry() {
                 if (this.addForm.photos.length === 0) return alert('Musisz dodać przynajmniej jedno zdjęcie sprawcy.');
                 
-                const suspectData = { photos: this.addForm.photos };
+                const suspectData = { 
+                    photos: this.addForm.photos,
+                    ageMin: this.addForm.suspect.ageMin,
+                    ageMax: this.addForm.suspect.ageMax
+                };
                 this.addForm.suspectFields.forEach(f => suspectData[f.key] = f.value);
                 
                 try {
@@ -441,16 +497,15 @@
                     console.error('Błąd zapisu:', error);
                 }
             },
-            // Wczytuje wszystkich sprawców z bazy i przygotowuje ich do wyświetlenia
             async loadSuspects() {
                 const allSuspects = await db.suspects.toArray();
                 const allEvents = await db.events.toArray();
                 
+                this.availableStores = [...new Set(allEvents.map(e => e.storeNumber).filter(Boolean))].sort((a, b) => a - b);
+                
                 this.suspects = allSuspects.map(s => {
                     const relatedEvents = allEvents.filter(e => e.suspectId === s.id);
                     const stores = [...new Set(relatedEvents.map(e => e.storeNumber).filter(Boolean))];
-                    
-                    // Tworzy jedno, duże pole tekstowe do przeszukiwania, zawierające dane sprawcy i jego zdarzeń
                     const searchableText = (JSON.stringify(s) + JSON.stringify(relatedEvents)).toLowerCase();
 
                     return { 
@@ -461,7 +516,6 @@
                     };
                 });
             },
-            // Wczytuje szczegółowe dane jednego sprawcy i pokazuje modal
             async showSuspectDetails(suspectId) {
                 const suspect = await db.suspects.get(suspectId);
                 const events = await db.events.where({ suspectId }).sortBy('eventDate');
@@ -482,9 +536,8 @@
                 };
                 this.modals.details.show = true;
             },
-            // Otwiera modal edycji sprawcy z wypełnionymi danymi
             openEditSuspectModal(suspect) {
-                this.modals.editSuspect.id = suspect.id;
+                this.modals.editSuspect.data = JSON.parse(JSON.stringify(suspect));
                 this.modals.editSuspect.fields = Object.keys(fieldSchemas.suspect).map(key => {
                     const schema = fieldSchemas.suspect[key];
                     return { key, ...schema, value: suspect[key] || (schema.type === 'checkbox' ? [] : '') }
@@ -492,19 +545,20 @@
                 this.modals.details.show = false;
                 this.modals.editSuspect.show = true;
             },
-            // Zapisuje zmiany w profilu sprawcy
             async saveSuspectChanges() {
-                const suspectId = this.modals.editSuspect.id;
-                const updatedData = {};
+                const suspectData = this.modals.editSuspect.data;
+                const updatedData = {
+                    ageMin: suspectData.ageMin,
+                    ageMax: suspectData.ageMax
+                };
                 this.modals.editSuspect.fields.forEach(f => updatedData[f.key] = f.value);
-                await db.suspects.update(suspectId, updatedData);
+                await db.suspects.update(suspectData.id, updatedData);
                 alert('Dane sprawcy zaktualizowane.');
                 this.modals.editSuspect.show = false;
                 this.loadSuspects();
             },
-            // Otwiera modal edycji zdarzenia z wypełnionymi danymi
             openEditEventModal(event) {
-                this.modals.editEvent.data = JSON.parse(JSON.stringify(event)); // Głęboka kopia
+                this.modals.editEvent.data = JSON.parse(JSON.stringify(event));
                 if (!this.modals.editEvent.data.theftType) this.$set(this.modals.editEvent.data, 'theftType', []);
                 if (this.modals.editEvent.data.eventDate) {
                     this.modals.editEvent.data.dateForInput = new Date(this.modals.editEvent.data.eventDate).toISOString().slice(0, 10);
@@ -512,7 +566,6 @@
                 this.modals.details.show = false;
                 this.modals.editEvent.show = true;
             },
-            // Zapisuje zmiany w zdarzeniu
             async saveEventChanges() {
                 const eventData = this.modals.editEvent.data;
                 const updates = {
@@ -526,25 +579,26 @@
                 this.modals.editEvent.show = false;
                 this.loadSuspects();
             },
-            // Resetuje wszystkie aktywne filtry
             resetFilters() {
-                for (const key in this.filters) { this.filters[key] = []; }
+                this.initializeFilters(); // Używa funkcji inicjalizującej do resetowania
                 this.modals.filters.show = false;
             },
-            // Inicjalizuje obiekt filtrów na podstawie schematu
             initializeFilters() {
                 const filterKeys = Object.keys(fieldSchemas.suspect).filter(k => k !== 'nickname');
-                filterKeys.forEach(key => this.$set(this.filters, key, []));
+                const filters = {};
+                filterKeys.forEach(key => filters[key] = []);
+                filters.stores = [];
+                filters.ageRange = { min: 10, max: 90 }; // Domyślny, szeroki zakres
+                this.filters = filters;
             },
-            // Dodaje do bazy dane testowe
             async seedDatabase() {
                 if (!confirm("Czy na pewno chcesz dodać przykładowe dane? Usunie to wszystkie istniejące rekordy.")) return;
                 await this.clearDatabase(false);
 
                 const sampleData = [
-                    { suspect: { nickname: 'Broderia z Thotem', gender: 'Kobieta', age: '26-40', hairColor: 'Blond', hairLength: 'Długie', zarost: 'Brak' }, event: { amobitId: 'AMOBIT-001', eventType: 'Udaremnienie', storeNumber: '123', amount: 150.50, theftType: ['perfumy maszynki itp'] } },
-                    { suspect: { nickname: 'Szybki Lopez', gender: 'Mężczyzna', age: '18-25', hairColor: 'Czarne', hairLength: 'Krótkie', tattoos: ['Prawe ramię'], zarost: 'Kilkudniowy zarost' }, event: { amobitId: 'AMOBIT-002', eventType: 'Ujęcie', storeNumber: '456', amount: 320.00, theftType: ['biegacz (szczotki)', 'inne'], theftTypeOther: 'Ukradł też drogie alkohole' } },
-                    { suspect: { gender: 'Mężczyzna', age: '41-60', hairColor: '', hairLength: 'Łysy', glasses: 'Tak' }, event: { amobitId: 'AMOBIT-003', eventType: 'Wykrycie', storeNumber: '123', description: 'Stały klient.' } },
+                    { suspect: { nickname: 'Broderia z Thotem', gender: 'Kobieta', ageMin: 28, ageMax: 35, hairColor: 'Blond', hairLength: 'Długie', zarost: 'Brak' }, event: { amobitId: 'AMOBIT-001', eventType: 'Udaremnienie', storeNumber: '123', amount: 150.50, theftType: ['perfumy maszynki itp'] } },
+                    { suspect: { nickname: 'Szybki Lopez', gender: 'Mężczyzna', ageMin: 20, ageMax: 24, hairColor: 'Czarne', hairLength: 'Krótkie', tattoos: ['Prawe ramię'], zarost: 'Kilkudniowy zarost' }, event: { amobitId: 'AMOBIT-002', eventType: 'Ujęcie', storeNumber: '456', amount: 320.00, theftType: ['biegacz (szczotki)', 'inne'], theftTypeOther: 'Ukradł też drogie alkohole' } },
+                    { suspect: { gender: 'Mężczyzna', ageMin: 50, ageMax: 60, hairColor: '', hairLength: 'Łysy', glasses: 'Tak' }, event: { amobitId: 'AMOBIT-003', eventType: 'Wykrycie', storeNumber: '123', description: 'Stały klient.' } },
                 ];
                 
                 const canvas = document.createElement('canvas'); canvas.width = 100; canvas.height = 100;
@@ -561,7 +615,6 @@
                 alert('Dodano dane przykładowe.');
                 this.loadSuspects();
             },
-            // Całkowicie czyści bazę danych
             async clearDatabase(confirmFirst = true) {
                 if (confirmFirst && !confirm("Czy na pewno chcesz usunąć WSZYSTKIE dane z bazy? Tej operacji nie można cofnąć.")) return;
                 await db.delete();
@@ -570,13 +623,11 @@
                 this.modals.settings.show = false;
                 this.loadSuspects();
             },
-            // Otwiera modal dodawania/przypisywania zdarzenia
             openAddEventModal(suspectId) {
                 this.resetAddEventForm();
                 this.modals.addEvent.suspectId = suspectId;
                 this.modals.addEvent.show = true;
             },
-            // Zapisuje nowe zdarzenie do istniejącego sprawcy
             async saveNewEventToSuspect() {
                 const form = this.addEventForm;
                 if (!form.amobitId) return alert('Musisz podać numer Amodit.');
@@ -605,7 +656,6 @@
                     else alert('Wystąpił błąd podczas zapisu.');
                 }
             },
-            // Przypisuje istniejące zdarzenie do sprawcy
             async assignExistingEvent() {
                 const amobitId = this.assignEventId;
                 if (!amobitId) return alert('Wpisz numer Amodit.');
@@ -619,7 +669,6 @@
                 this.modals.addEvent.show = false;
                 this.showSuspectDetails(this.modals.addEvent.suspectId);
             },
-            // Usuwa profil sprawcy i wszystkie jego zdarzenia
             async deleteSuspect(suspectId) {
                 if (!confirm(`Czy na pewno chcesz usunąć sprawcę #${suspectId} i wszystkie jego zdarzenia? Tej operacji nie można cofnąć.`)) return;
 
@@ -636,18 +685,15 @@
                     console.error('Błąd usuwania:', error);
                 }
             },
-            // Pokazuje zdjęcie na pełnym ekranie
             showFullscreenPhoto(url) {
                 this.modals.fullscreenPhoto.url = url;
                 this.modals.fullscreenPhoto.show = true;
             },
-            // Eksportuje całą bazę danych do pliku JSON
             async exportDatabase() {
                 try {
                     const allSuspects = await db.suspects.toArray();
                     const allEvents = await db.events.toArray();
 
-                    // Konwertuje zdjęcia (obiekty Blob) na tekst Base64, aby można je było zapisać w JSON
                     const serializableSuspects = await Promise.all(allSuspects.map(async s => {
                         const photosAsBase64 = await Promise.all((s.photos || []).map(p => blobToBase64(p)));
                         return { ...s, photos: photosAsBase64 };
@@ -664,7 +710,6 @@
                     const timestamp = new Date().toISOString().slice(0, 10);
                     const filename = `katalog-sprawcow-backup-${timestamp}.json`;
 
-                    // Tworzy link i symuluje kliknięcie, aby pobrać plik
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(blob);
                     link.download = filename;
@@ -679,13 +724,12 @@
                     alert('Wystąpił błąd podczas eksportu danych.');
                 }
             },
-            // Importuje dane z pliku JSON, nadpisując obecną bazę
             async importDatabase(event) {
                 const file = event.target.files[0];
                 if (!file) return;
 
                 if (!confirm("Import danych zastąpi całą obecną bazę. Czy na pewno chcesz kontynuować? Tej operacji nie można cofnąć.")) {
-                    event.target.value = ''; // Resetuje pole wyboru pliku
+                    event.target.value = '';
                     return;
                 }
 
@@ -698,13 +742,11 @@
                             throw new Error("Plik importu ma nieprawidłową strukturę.");
                         }
 
-                        // Konwertuje zdjęcia z Base64 z powrotem na obiekty Blob
                         const suspectsWithBlobs = importedData.suspects.map(s => {
                             const photosAsBlobs = (s.photos || []).map(base64String => {
                                 const mimeType = base64String.match(/:(.*?);/)[1];
                                 return base64ToBlob(base64String, mimeType);
                             });
-                            // Usuwa pole 'id', aby Dexie nadało nowe, unikając konfliktów
                             delete s.id;
                             return { ...s, photos: photosAsBlobs };
                         });
@@ -718,30 +760,29 @@
 
                         alert('Import danych zakończony pomyślnie.');
                         this.modals.settings.show = false;
-                        await this.loadSuspects(); // Odświeża dane w aplikacji
+                        await this.loadSuspects();
                     } catch (error) {
                         console.error("Błąd importu:", error);
                         alert(`Wystąpił błąd podczas importu: ${error.message}`);
                     } finally {
-                        event.target.value = ''; // Zawsze resetuje pole wyboru pliku
+                        event.target.value = '';
                     }
                 };
                 reader.readAsText(file);
             },
         },
-        // --- CYKL ŻYCIA VUE ---
-        // 'mounted' to funkcja, która wykonuje się automatycznie, gdy Vue jest gotowe do pracy.
-        // Idealne miejsce na inicjalizację aplikacji.
         async mounted() {
             this.initializeFilters();
             await this.loadSuspects();
             this.resetAddForm();
             this.resetAddEventForm();
-            this.isReady = true; // Pokazuje aplikację po załadowaniu
+            this.isReady = true;
         }
     });
     </script>
-<script>
+    
+    <!-- PWA / Instalacja -->
+    <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js').then(registration => {
