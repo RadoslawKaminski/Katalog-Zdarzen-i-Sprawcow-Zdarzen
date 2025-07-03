@@ -1,0 +1,121 @@
+/* style.css */
+
+:root {
+    --primary-color: #0d6efd; --dark-bg: #111315; --light-bg: #212529;
+    --text-color: #dee2e6; --border-color: #495057; --success-color: #198754; --danger-color: #dc3545;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0; background-color: var(--dark-bg); color: var(--text-color);
+}
+#app { opacity: 0; transition: opacity 0.5s; }
+#app.ready { opacity: 1; }
+
+/* --- Nagłówek i Nawigacja --- */
+header {
+    background-color: var(--light-bg); padding: 10px 15px;
+    border-bottom: 2px solid var(--primary-color); position: sticky; top: 0; z-index: 100;
+    display: grid; width: 100%; grid-template-columns: 40px 1fr 40px; align-items: center;
+}
+header h1 { margin: 0; font-size: 1.2em; text-align: center; grid-column: 2; }
+.settings-btn { background: none; border: none; color: var(--text-color); font-size: 1.5em; cursor: pointer; grid-column: 3; justify-self: end; }
+nav { display: flex; justify-content: stretch; margin-top: 10px; gap: 10px; grid-column: 1 / -1; }
+nav button {
+    background-color: #343a40; color: var(--text-color); border: 1px solid var(--border-color);
+    padding: 12px; border-radius: 8px; cursor: pointer; font-size: 1em; flex: 1; font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+}
+nav button.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+main { padding: 15px; }
+
+/* --- Przyciski i Formularze --- */
+.btn {
+    display: block; width: 100%; text-align: center; background-color: var(--primary-color);
+    color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 500;
+    border: none; font-size: 1em; cursor: pointer;
+}
+.btn-success { background-color: var(--success-color); }
+.btn-secondary { background-color: #6c757d; }
+.btn-danger { background-color: var(--danger-color); }
+.btn-dynamic-add { background-color: #343a40; border: 1px dashed var(--border-color); margin-top: 15px; }
+.btn-icon { background: none; border: none; color: var(--text-color); font-size: 1.2em; cursor: pointer; padding: 5px; }
+
+form { display: flex; flex-direction: column; gap: 15px; }
+.form-section { background-color: var(--light-bg); padding: 15px; border-radius: 8px; }
+.form-section h3 { margin: 0 0 15px 0; }
+form input, form select, form textarea {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);
+    background-color: #495057; color: var(--text-color); font-size: 1em;
+}
+.form-group { display: flex; flex-direction: column; gap: 15px; }
+.form-group-inline { display: flex; align-items: center; gap: 10px; }
+.form-group-inline label { flex-shrink: 0; }
+.form-group-inline input { flex-grow: 1; }
+
+.photo-preview-container { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.photo-preview-container img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; }
+.photo-edit-wrapper { position: relative; }
+.photo-delete-btn {
+    position: absolute; top: -5px; right: -5px; background-color: var(--danger-color);
+    color: white; border: 2px solid var(--dark-bg); border-radius: 50%;
+    width: 24px; height: 24px; font-weight: bold; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; line-height: 1;
+}
+
+/* --- Widok Katalogu --- */
+.baza-controls { display: flex; gap: 10px; margin-bottom: 20px; }
+.baza-controls input { flex-grow: 1; }
+.suspect-card {
+    display: flex; gap: 15px; align-items: center; background-color: var(--light-bg);
+    padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer;
+}
+.suspect-card img { width: 60px; height: 60px; object-fit: cover; border-radius: 50%; flex-shrink: 0; }
+.suspect-card h4 { margin: 0 0 5px 0; font-size: 1.1em; }
+.suspect-card p { margin: 2px 0 0 0; font-size: 0.8em; color: #adb5bd; }
+.suspect-card-info { display: flex; flex-direction: column; }
+
+/* --- Style Modali (okien dialogowych) --- */
+.modal {
+    display: flex; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
+    overflow-y: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center;
+}
+.modal-content {
+    background-color: var(--dark-bg); padding: 20px;
+    width: 90%; max-width: 600px; border-radius: 10px; position: relative; max-height: 90vh; overflow-y: auto;
+}
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 10px; }
+.modal-header h2 { margin: 0; flex-grow: 1; }
+.close-button {
+    font-size: 20px; font-weight: bold; cursor: pointer; background: #343a40; border: none; color: #aaa;
+    border-radius: 50%; width: 32px; height: 32px; display: flex;
+    align-items: center; justify-content: center; line-height: 1; flex-shrink: 0;
+}
+
+.filter-group { margin-bottom: 15px; }
+.filter-group legend { font-weight: bold; margin-bottom: 10px; }
+.filter-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.filter-options label { background-color: #343a40; padding: 8px 12px; border-radius: 15px; font-size: 0.9em; cursor: pointer; user-select: none; transition: background-color 0.2s; }
+label.checked { background-color: var(--primary-color); color: white; }
+.filter-options input { display: none; }
+fieldset { border: none; padding: 0; margin: 0; }
+
+.suspect-details-photos { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; }
+.suspect-details-photos img { height: 200px; border-radius: 8px; cursor: pointer; }
+.suspect-details-info, .suspect-stats { display: grid; grid-template-columns: auto 1fr; gap: 5px 15px; margin: 15px 0; }
+.suspect-stats dt, .suspect-details-info dt { font-weight: bold; color: #adb5bd; }
+.event-entry { border-top: 1px solid var(--border-color); padding: 10px 0; }
+.event-header { display: flex; justify-content: space-between; align-items: center; }
+
+.field-selection-menu .btn { margin-bottom: 10px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+.modal-tabs .btn { background-color: #343a40; border: 1px solid var(--border-color); flex: 1; }
+.modal-tabs .btn.active { background-color: var(--primary-color); border-color: var(--primary-color); }
+
+/* Style dla modali, które muszą być na wierzchu */
+.fullscreen-photo-modal { z-index: 1003; }
+.fullscreen-photo-modal .modal-content { background: none; padding: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.fullscreen-photo-modal img { max-width: 100%; max-height: 100%; }
+#field-selection-modal { z-index: 1002; }
