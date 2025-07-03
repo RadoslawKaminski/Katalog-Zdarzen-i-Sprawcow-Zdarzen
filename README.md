@@ -1,0 +1,1 @@
+# Katalog-Zdarze-i-Sprawc-w-Zdarze-
