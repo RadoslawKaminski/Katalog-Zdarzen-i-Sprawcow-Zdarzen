@@ -191,9 +191,11 @@
                                 <span>-</span>
                                 <input type="number" v-model.number="addForm.suspect.ageMax" placeholder="Do">
                             </div>
+                            <!-- Dynamicznie dodawane pola -->
                             <div v-for="field in addForm.suspectFields" :key="field.key">
                                 <div v-if="field.type === 'select'"><select v-model="field.value"><option value="" disabled>{{ field.label }}...</option><option v-for="option in field.options" :value="option">{{ option }}</option></select></div>
                                 <input v-if="field.type === 'text'" type="text" v-model="field.value" :placeholder="field.label">
+                                <textarea v-if="field.type === 'textarea'" v-model="field.value" rows="3" :placeholder="field.label"></textarea>
                                 <fieldset v-if="field.type === 'checkbox'"><legend>{{ field.label }}</legend><div class="filter-options"><label v-for="option in field.options" :key="option" :class="{checked: field.value.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="field.value"></label></div></fieldset>
                             </div>
                         </div>
@@ -312,6 +314,7 @@
                         <label>{{field.label}}</label>
                         <div v-if="field.type === 'select'"><select v-model="field.value"><option value="" disabled>Wybierz...</option><option v-for="option in field.options" :value="option">{{ option }}</option></select></div>
                         <input v-if="field.type === 'text'" type="text" v-model="field.value" :placeholder="field.label">
+                        <textarea v-if="field.type === 'textarea'" v-model="field.value" rows="3" :placeholder="field.label"></textarea>
                         <fieldset v-if="field.type === 'checkbox'"><div class="filter-options"><label v-for="option in field.options" :key="option" :class="{checked: field.value.includes(option)}"><span>{{ option }}</span><input type="checkbox" :value="option" v-model="field.value"></label></div></fieldset>
                     </div>
                 </div>
@@ -356,25 +359,25 @@
     <script>
     // === BAZA DANYCH (DEXIE.JS) ===
     const db = new Dexie('AmobitSecurityVueDB');
-    // Wersja 3: Zmiana pola 'age' na 'ageMin' i 'ageMax'
+    // Wersja 4: Dodanie pola 'suspectDescription'
+    db.version(4).stores({
+        suspects: '++id, nickname, gender, ageMin, ageMax, hairColor, hairLength, glasses, zarost, *tattoos',
+        events: '&amobitId, suspectId, *theftType',
+    });
     db.version(3).stores({
         suspects: '++id, nickname, gender, ageMin, ageMax, hairColor, hairLength, glasses, zarost, *tattoos',
         events: '&amobitId, suspectId, *theftType',
     }).upgrade(tx => {
-        // Skrypt migracji z wersji 2 do 3
         return tx.table('suspects').toCollection().modify(s => {
-            if (s.age) { // Jeśli istnieje stare pole 'age'
+            if (s.age) {
                 const ageMap = {
                     "Poniżej 18": { min: null, max: 17 }, "18-25": { min: 18, max: 25 },
                     "26-40": { min: 26, max: 40 }, "41-60": { min: 41, max: 60 },
                     "Powyżej 60": { min: 61, max: null }
                 };
                 const range = ageMap[s.age];
-                if (range) {
-                    s.ageMin = range.min;
-                    s.ageMax = range.max;
-                }
-                delete s.age; // Usuń stare pole
+                if (range) { s.ageMin = range.min; s.ageMax = range.max; }
+                delete s.age;
             }
         });
     });
@@ -398,10 +401,12 @@
             glasses: { label: "Okulary", type: "select", options: ["Tak", "Nie", "Nieraz"] },
             zarost: { label: "Zarost", type: "select", options: ["Brak", "Wąsy", "Broda", "Kozia bródka", "Kilkudniowy zarost"] },
             tattoos: { label: "Tatuaże", type: "checkbox", options: ["Prawa dłoń", "Lewa dłoń", "Prawe ramię", "Lewe ramię", "Szyja", "Nogi", "Twarz"] },
+            // ZMIANA: Dodano nowe pole do schematu
+            suspectDescription: { label: "Dodatkowy opis sprawcy", type: "textarea" },
         },
         event: {
             amount: { label: "Kwota kradzieży", type: "number" },
-            description: { label: "Opis", type: "textarea" },
+            description: { label: "Opis zdarzenia", type: "textarea" },
             theftType: { label: "Typ kradzieży", type: "checkbox", options: ["biegacz (szczotki)", "perfumy maszynki itp", "KSO", "kolorówka", "wyjmuje z pudełek", "co popadnie, co w rączki wpadnie na sali", "inne"] },
         }
     };
@@ -539,7 +544,7 @@
                 // Pola widoczne domyślnie
                 const defaultFields = ['gender', 'hairColor'].map(key => {
                     const schema = fieldSchemas.suspect[key];
-                    return { key, ...schema, value: '' };
+                    return { key, ...schema, value: schema.type === 'checkbox' ? [] : '' };
                 });
 
                 this.addForm = {
@@ -656,8 +661,14 @@
                 this.modals.details.show = true;
             },
             openEditSuspectModal(suspect) {
-                this.modals.editSuspect.data = JSON.parse(JSON.stringify(suspect));
-                this.modals.editSuspect.photoUrls = suspect.photos.map(p => URL.createObjectURL(p));
+                // ZMIANA: Poprawiony sposób kopiowania obiektu, aby nie uszkodzić obiektów Blob
+                this.modals.editSuspect.data = { ...suspect }; 
+                // Upewnij się, że tablica 'photos' istnieje
+                if (!this.modals.editSuspect.data.photos) {
+                    this.modals.editSuspect.data.photos = [];
+                }
+                this.modals.editSuspect.photoUrls = this.modals.editSuspect.data.photos.map(p => URL.createObjectURL(p));
+                
                 this.modals.editSuspect.fields = Object.keys(fieldSchemas.suspect).map(key => {
                     const schema = fieldSchemas.suspect[key];
                     return { key, ...schema, value: suspect[key] || (schema.type === 'checkbox' ? [] : '') }
@@ -910,10 +921,7 @@
                                 eventsToAdd = importedData.events.filter(ev => !existingAmobitIds.has(ev.amobitId));
                                 
                                 const requiredSuspectIds = new Set(eventsToAdd.map(ev => ev.suspectId));
-                                const existingSuspectIds = new Set(await db.suspects.toCollection().keys());
                                 
-                                // W trybie merge, dodajemy tylko tych sprawców, którzy są potrzebni dla nowych zdarzeń
-                                // i których ID nie koliduje z istniejącymi (chociaż Dexie i tak nada nowe ID)
                                 suspectsToAdd = suspectsWithBlobs.filter(s => requiredSuspectIds.has(s.id));
                             }
                             
