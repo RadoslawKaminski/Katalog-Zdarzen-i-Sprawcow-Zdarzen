@@ -1,5 +1,5 @@
 // Ustaw nazwę i wersję pamięci podręcznej. Zmieniaj tę wersję przy każdej aktualizacji!
-const CACHE_NAME = 'katalog-sprawcow-cache-4';
+const CACHE_NAME = 'katalog-sprawcow-cache-5';
 
 // Lista plików, które tworzą "skorupę" aplikacji i muszą być dostępne offline.
 const urlsToCache = [
